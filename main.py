@@ -67,6 +67,7 @@ def outline():
         
     4. Search for and summarize the content learned using google search python API
 
+        - toy with scanning the text like a human would, look at first sentence of all paragraphs and can decide what to read from there - dont want to read the whole thing
         
     5.  Assess if the data collected fulfills the initial plan of action.
 

@@ -2,12 +2,20 @@ import requests
 from bs4 import BeautifulSoup
 from newspaper import Article
 import tiktoken
+from summa.summarizer import summarize
+from summa import keywords
 
 def fetch_site_content(url):
     article = Article(url)
     article.download()
     article.parse()
+    article.summary, article.keywords = summarize_content(article.text)
     return article
+
+def summarize_content(content):
+    summary = summarize(content, words=2000)
+    extracted_keywords = keywords.keywords(content)
+    return summary, extracted_keywords
 
 def cost_analysis(input="", output=""):
     enc = tiktoken.encoding_for_model("gpt-4")
@@ -21,25 +29,9 @@ def cost_analysis(input="", output=""):
     return total_cost
 
 if __name__ == "__main__":
-    print(cost_analysis("""Topic of Research: Deloitte
-Purpose of Context: Preparation for a business meeting with Deloitte
-Primary Audience: Business professionals
-Research Plan:
-- Understand the history and background of Deloitte
-- Identify the key services and industries Deloitte operates in
-- Research recent news and updates about Deloitte
-- Analyze Deloitte's business strategies and performance
-- Identify key personnel and decision-makers in Deloitte
-- Understand Deloitte's corporate culture and values
-- Review any recent case studies or projects undertaken by Deloitte
-Search Queries:
-- Deloitte company history
-- Deloitte services and industries
-- Deloitte recent news
-- Deloitte business strategies
-- Deloitte key personnel
-- Deloitte corporate culture
-- Deloitte case studies"""))
+    article = fetch_site_content("https://www.sec.gov/Archives/edgar/data/1562476/000119312515070090/d839495d10k.htm")
+    print(article.summary)
+    # print(article.keywords)
 
 
 # def fetch_site_content(url):
