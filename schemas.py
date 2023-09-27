@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from typing import List, Optional
 from enum import Enum
 from dataclasses import dataclass
 
@@ -38,7 +39,13 @@ class SearchResultSchema(BaseModel):
 
     def to_prompt(self, source_number):
         return f"{source_number}:\n{self.title}\n{self.link}\n{self.description}\n{self.summary}\n{self.keywords}\n${self.cost}\n\n"
+    
 
+class SummaryResultSchema(BaseModel):
+    summary: Optional[str] = Field(..., description="Summary of the source content.")
+    keywords: Optional[list[str]] = Field(..., description="Keywords extracted from the source content.")
+    should_include: bool = Field(..., description="Whether or not to include this source in the final paper.")
+    
 if __name__ == "__main__":
     # test SearchResultsSchema
     search_result = SearchResultSchema(
