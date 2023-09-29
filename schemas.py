@@ -9,8 +9,8 @@ class ModelData:
     max_context: int
     pricing: dict
 
-    # def __str__(self):
-    #     return self.official_name
+    def __str__(self):
+        return self.official_name
 
 class ModelEnum(Enum):
     GPT4_8K = ModelData(official_name="gpt-4", max_context=8000, pricing={"input": 0.03, "output": 0.06})
@@ -20,6 +20,12 @@ class ModelEnum(Enum):
 
     def __str__(self):
         return self.value.official_name
+    
+
+def str_to_model_enum(model_str: str) -> ModelEnum:
+    for model in ModelEnum:
+        if model.value.official_name == model_str:
+            return model
 
 
 class ResearchActionPlanSchema(BaseModel):
@@ -49,6 +55,42 @@ class SearchResultSchema(BaseModel):
             "cost": self.cost,
             "model": self.model.value.official_name
         }
+    
+class SearchResultSummary(BaseModel):
+    source_material: SearchResultSchema
+    details: list[str]
+    authors: list[str]
+    date: str
+    relevancy: dict[str, int]
+    error: Optional[str] = None
+
+    def __str__(self):
+        return f"""
+Title: {self.source_material.title}
+Url: {self.source_material.link}
+Content: {self.source_material.content}
+Cost: ${self.source_material.cost}
+Summary Model: {self.source_material.model}
+
+Details: {self.details}
+Authors: {self.authors}
+Date: {self.date}
+Relevancy: {self.relevancy}
+
+Error: {self.error}
+
+"""
+    
+    def to_json(self):
+        return {
+            "source_material": self.source_material.to_json(),
+            "details": self.details,
+            "authors": self.authors,
+            "date": self.date,
+            "relevancy": self.relevancy,
+            "error": self.error
+        }
+
     
 if __name__ == "__main__":
     # test SearchResultsSchema

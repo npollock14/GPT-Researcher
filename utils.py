@@ -1,12 +1,14 @@
 from bs4 import BeautifulSoup
 from newspaper import Article
 import tiktoken
-from schemas import ResearchActionPlanSchema, SearchResultSchema, ModelEnum
+from schemas import ResearchActionPlanSchema, SearchResultSchema, ModelEnum, str_to_model_enum, SearchResultSummary
 from googlesearch import search
 from prompts import get_summary_prompt, prepare_source_material_for_summary_prompt
 import re
 import os
 import openai
+from aiohttp import ClientSession
+import asyncio
 
 
 def fetch_site_content(url:str):
@@ -47,7 +49,7 @@ def est_cost_search_result(search_result: SearchResultSchema):
 def generate_search_results(research_action_plan: ResearchActionPlanSchema) -> list[SearchResultSchema]:
     search_results = []
     for query in research_action_plan.search_queries:
-        res = list(search(query, num_results=1, advanced=True))
+        res = list(search(query, num_results=3, advanced=True))
         for search_result in res:
             link = search_result.url
             site_content = None
@@ -78,26 +80,27 @@ def generate_search_results(research_action_plan: ResearchActionPlanSchema) -> l
             search_results.append(new_result)
     return search_results
 
-def parse_raw_summary(raw_summary: str) -> dict:
+def parse_raw_summary(raw_summary: str, search_result: SearchResultSchema) -> SearchResultSummary:
     lines = [line.strip() for line in raw_summary.strip().split("\n")]
     
-    parsed_data = {}
+    source_material = {}
     current_section = None
     details = []
     relevancy = {}
+    error_messages = []
     
     for line in lines:
         if line.startswith("Title:"):
-            parsed_data["Title"] = line.split("Title:")[1].strip()
+            source_material["Title"] = line.split("Title:")[1].strip()
         elif line.startswith("Author(s):"):
             authors = line.split("Author(s):")[1].strip()
             if authors.lower() == "not found":
-                parsed_data["Author(s)"] = []
+                source_material["Author(s)"] = []
             else:
-                parsed_data["Author(s)"] = [author.strip() for author in authors.split(",")]
+                source_material["Author(s)"] = [author.strip() for author in authors.split(",")]
         elif line.startswith("Date:"):
             date = line.split("Date:")[1].strip()
-            parsed_data["Date"] = "" if date.lower() == "not found" else date
+            source_material["Date"] = "" if date.lower() == "not found" else date
         elif line.startswith("- ") and current_section is None:
             details.append(line[2:].strip())
         elif line.startswith("Relevancy:"):
@@ -106,32 +109,59 @@ def parse_raw_summary(raw_summary: str) -> dict:
             section, score = line.split(":")
             relevancy[section.lstrip("- ").strip()] = int(score.strip())
     
-    parsed_data["Details"] = details
-    parsed_data["Relevancy"] = relevancy
+    # Check for missing or empty sections
+    if not details:
+        error_messages.append("Details section is missing or empty.")
+    if not relevancy:
+        error_messages.append("Relevancy section is missing or empty.")
     
-    return parsed_data
-
-def summarize_result(search_result: SearchResultSchema, research_action_plan: ResearchActionPlanSchema) -> dict:
-    completion = openai.ChatCompletion.create(
-    model="gpt-3.5-turbo",
-    messages=[
-        {
-        "role": "system",
-        "content": get_summary_prompt(research_action_plan)
-        },
-        {
-        "role": "user",
-        "content": prepare_source_material_for_summary_prompt(search_result)
-        }
-    ],
-    temperature=0.9,
-    max_tokens=512,
-    top_p=1,
-    frequency_penalty=0,
-    presence_penalty=0
+    error = None if not error_messages else " ".join(error_messages)
+    
+    return SearchResultSummary(
+        source_material=search_result,
+        details=details,
+        authors=source_material.get("Author(s)", []),
+        date=source_material.get("Date", ""),
+        relevancy=relevancy,
+        error=error
     )
+
+async def summarize_result_async(search_result: SearchResultSchema, research_action_plan: ResearchActionPlanSchema) -> SearchResultSummary:
+    completion = await openai.ChatCompletion.acreate(
+        model=search_result.model.value.official_name,
+        messages=[
+            {
+                "role": "system",
+                "content": get_summary_prompt(research_action_plan)
+            },
+            {
+                "role": "user",
+                "content": prepare_source_material_for_summary_prompt(search_result)
+            }
+        ],
+        temperature=0.7,
+        max_tokens=512,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0
+    )
+    raw_result: str = completion.choices[0].message.content
+    return parse_raw_summary(raw_result, search_result)
+
+async def summarize_results(search_results: list[SearchResultSchema], research_action_plan: ResearchActionPlanSchema) -> list[dict]:
+    # Create a new aiohttp client session
+    session = ClientSession()
+    openai.aiosession.set(session)
+
+    # Parallelize the summarization of search results
+    summaries: list[SearchResultSummary] = await asyncio.gather(
+        *[summarize_result_async(result, research_action_plan) for result in search_results]
+    )
+
+    # Close the session at the end
+    await session.close()
     
-    return parse_raw_summary(completion.choices[0].message.content)
+    return summaries
 
 def clean_content(content: str) -> str:
     # Replace multiple newline characters with a single newline
@@ -153,25 +183,61 @@ if __name__ == "__main__":
     load_dotenv()
     openai.api_key = os.getenv("OPENAI_API_KEY")
 
-    if not os.path.exists('./outputs/parsed_user_prompt_for_research.json'):
-        print("Error: ./outputs/parsed_user_prompt_for_research.json not found")
+    parsed_user_prompt_output_file = "./outputs/parsed_user_prompt_for_research.json"
+
+    if not os.path.exists(parsed_user_prompt_output_file):
+        print(f"Error: {parsed_user_prompt_output_file} not found")
         exit(1)
-    with open('./outputs/parsed_user_prompt_for_research.json') as json_file:
+    with open(parsed_user_prompt_output_file) as json_file:
         result_data = json_file.read()
-        result = ResearchActionPlanSchema.model_validate_json(result_data)
+        action_plan = ResearchActionPlanSchema.model_validate_json(result_data)
 
-    # generate search results
-    search_results = generate_search_results(result)
+    search_result_output_file = "./outputs/search_results.json"
+    search_results: list[SearchResultSchema] = []
+    if os.path.exists(search_result_output_file):
+        # just use the cached search results
+        with open(search_result_output_file) as json_file:
+            temp_results = json.load(json_file)
+            for search_result in temp_results:
+                res = SearchResultSchema(
+                    title=search_result["title"],
+                    link=search_result["link"],
+                    content=search_result["content"],
+                    cost=search_result["cost"],
+                    model=str_to_model_enum(search_result["model"])
+                )
+                search_results.append(res)
+    else:
+        # generate search results
+        search_results = generate_search_results(action_plan)
+        # save search results to a file outputs/search_results.json
+        with open(search_result_output_file, 'w') as outfile:
+            json.dump([search_result.to_json() for search_result in search_results], outfile, indent=4)
 
-    # save search results to a file outputs/search_results.json
-    # with open('./outputs/search_results.json', 'w') as outfile:
-    #     json.dump([search_result.to_json() for search_result in search_results], outfile, indent=4)
+    summary_output_file = "./outputs/summary.json"
+    summaries: list[SearchResultSummary] = []
+    if os.path.exists(summary_output_file):
+        # just use the cached summary
+        with open(summary_output_file) as json_file:
+            summaries = json.load(json_file)
+    else:
+        # summarize search result for index 0
+        # sum the cost of all search results and ask user if they want to continue
+        total_cost = 0
+        for search_result in search_results:
+            total_cost += search_result.cost
 
-    # summarize search result for index 0
-    summary = summarize_result(search_results[3], result)
-    print(summary)
-    # save the summary to a file outputs/summary.json
-    with open('./outputs/summary.json', 'w') as outfile:
-        json.dump(summary, outfile, indent=4)
+        print(f"Total cost of processing {len(search_results)} search results: ${total_cost}")
+        ipt = input("Do you want to continue? (y/n): ")
+        if ipt.lower() != "y":
+            exit(0)
+
+        # parallelize the summarization of search results
+        summaries: list[SearchResultSummary] = asyncio.run(summarize_results(search_results, action_plan))
+
+        summary_output_file = "./outputs/summary.json"
+        # save the summaries to a file outputs/summary.json
+        with open(summary_output_file, 'w') as outfile:
+            json.dump([summary.to_json() for summary in summaries], outfile, indent=4)
 
     

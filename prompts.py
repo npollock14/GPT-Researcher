@@ -23,6 +23,9 @@ Relevancy:
 - {research_action_plan.paper_structure[1]}: 9
 ...
 - {research_action_plan.paper_structure[-1]}: 1
+
+If there is nothing of value in the source material or some sort of page error, simply respond in the style:
+Error: error message
 """
 
 def prepare_source_material_for_summary_prompt(search_result: SearchResultSchema):
