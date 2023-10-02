@@ -240,4 +240,22 @@ if __name__ == "__main__":
         with open(summary_output_file, 'w') as outfile:
             json.dump([summary.to_json() for summary in summaries], outfile, indent=4)
 
-    
+    num_details = 0
+    num_details_with_error = 0
+    relevance_scores = {}
+    for summary in summaries:
+        # filter out summaries with error or empty details
+        if summary["error"] is not None or len(summary["details"]) == 0:
+            continue
+        print("- "+"\n- ".join(summary["details"]))
+        num_details += len(summary["details"])
+        if summary["error"] is not None:
+            num_details_with_error += len(summary["details"])
+        for section, score in summary["relevancy"].items():
+            if section not in relevance_scores:
+                relevance_scores[section] = 0
+            relevance_scores[section] += score * len(summary["details"])
+
+    print(f"Total number of details: {num_details}")
+    print(f"Total number of details with error: {num_details_with_error}")
+    print(f"Relevance scores: {relevance_scores}")

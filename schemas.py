@@ -90,6 +90,23 @@ Error: {self.error}
             "relevancy": self.relevancy,
             "error": self.error
         }
+    
+class SectionSchema(BaseModel):
+    name: str
+    lods: list[str]
+
+    def __str__(self):
+        return f"""
+Section: {self.name}
+LODs: {self.lods}
+"""
+
+class PaperSchema(BaseModel):
+    sections: list[SectionSchema]
+
+    def __str__(self):
+        return "\n".join([str(section) for section in self.sections])
+    
 
     
 if __name__ == "__main__":
@@ -107,3 +124,23 @@ if __name__ == "__main__":
     # save to file
     with open('./outputs/search_results.json', 'w') as outfile:
         json.dump([search_result.to_json() for search_result in results], outfile, indent=4)
+
+    # test PaperSchema
+    paper = PaperSchema(
+        sections=[
+            SectionSchema(
+                name="Company Overview",
+                lods=["Top Level LOD", "Sub Level LOD"]
+            ),
+            SectionSchema(
+                name="Financials",
+                lods=["Full", "Summary"]
+            ),
+            SectionSchema(
+                name="Management",
+                lods=["Full", "Summary"]
+            )
+        ]
+    )
+    print(paper)
+    
