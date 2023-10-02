@@ -3,7 +3,7 @@ from newspaper import Article
 import tiktoken
 from schemas import ResearchActionPlanSchema, SearchResultSchema, ModelEnum, str_to_model_enum, SearchResultSummary
 from googlesearch import search
-from prompts import get_summary_prompt, prepare_source_material_for_summary_prompt
+from prompts import get_research_summary_prompt, prepare_source_material_for_summary_prompt
 import re
 import os
 import openai
@@ -69,9 +69,9 @@ def generate_search_results(research_action_plan: ResearchActionPlanSchema) -> l
                 model=ModelEnum.GPT3_5_TURBO_16K
             )
             # check what model to use based on content length
-            if fits_in_model(get_summary_prompt(research_action_plan) + prepare_source_material_for_summary_prompt(new_result), ModelEnum.GPT3_5_TURBO_4K, padding_tokens=100):
+            if fits_in_model(get_research_summary_prompt(research_action_plan) + prepare_source_material_for_summary_prompt(new_result), ModelEnum.GPT3_5_TURBO_4K, padding_tokens=100):
                 new_result.model = ModelEnum.GPT3_5_TURBO_4K
-            elif fits_in_model(get_summary_prompt(research_action_plan) + prepare_source_material_for_summary_prompt(new_result), ModelEnum.GPT3_5_TURBO_16K, padding_tokens=100):
+            elif fits_in_model(get_research_summary_prompt(research_action_plan) + prepare_source_material_for_summary_prompt(new_result), ModelEnum.GPT3_5_TURBO_16K, padding_tokens=100):
                 new_result.model = ModelEnum.GPT3_5_TURBO_16K
             else:
                 # skip this result
@@ -132,7 +132,7 @@ async def summarize_result_async(search_result: SearchResultSchema, research_act
         messages=[
             {
                 "role": "system",
-                "content": get_summary_prompt(research_action_plan)
+                "content": get_research_summary_prompt(research_action_plan)
             },
             {
                 "role": "user",

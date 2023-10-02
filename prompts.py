@@ -1,7 +1,7 @@
-from schemas import ResearchActionPlanSchema, SearchResultSchema, PaperSchema, ModelEnum
-from utils import fits_in_model
+from schemas import ResearchActionPlanSchema, SearchResultSchema, PaperSchema, ModelEnum, SearchResultSummary
+from utils import get_num_tokens
 
-def get_summary_prompt(research_action_plan: ResearchActionPlanSchema):
+def get_research_summary_prompt(research_action_plan: ResearchActionPlanSchema):
     csv_sections = (", ".join(research_action_plan.paper_structure)).strip()
     return f"""
 You are a researcher reading source material to create a {research_action_plan.type_of_paper_to_be_written} on {research_action_plan.topic_of_research}.
@@ -38,9 +38,9 @@ Content:
 {search_result.content}
 """
 
-def get_l1_write_prompt(research_action_plan: ResearchActionPlanSchema):
+def get_l1_write_prompt(research_action_plan: ResearchActionPlanSchema, curr_section: str):
     return f"""
-You are a world renowned researcher, known for your concise and information dense work. Use your knowledge as well as the provided notes to write the company overview section to a business briefing paper on: {research_action_plan.topic_of_research}. 
+You are a world renowned researcher, known for your concise and information dense work. Use your knowledge as well as the provided notes to write the {curr_section} section to a {research_action_plan.type_of_paper_to_be_written} paper on: {research_action_plan.topic_of_research}. 
 The purpose of the paper is: {research_action_plan.purpose_of_context}
 The primary audience is: {research_action_plan.primary_audience}
 The paper structure will be:
@@ -68,15 +68,51 @@ So far in the {section}, you {mentioned_text}:
     return f"""
     {prev_sections_prompt}
 
-You are now in charge of writing the company overview section. Make sure that your writing is information dense and fact based. Use markdown formatting.
+You are now in charge of writing the {research_action_plan.paper_structure[curr_section]} section. Make sure that your writing is information dense and fact based. Use markdown formatting.
 
 """
 
 def get_l2_write_prompt(research_action_plan: ResearchActionPlanSchema, curr_section: int, curr_paper: PaperSchema, max_tokens: int):
     # initialize an array of lods at maximum detail (0)
-    if(curr_section == 0):
-        return get_l2_write_prompt_text(research_action_plan, curr_section, curr_paper, [0] * len(research_action_plan.paper_structure))
     lods = [0] * curr_section
+    curr_l2_text = get_l2_write_prompt_text(research_action_plan, curr_section, curr_paper, lods)
     lowest_lod = 0
-    while not fits_in_model(get_l2_write_prompt_text(research_action_plan, curr_section, curr_paper, lods), ModelEnum.GPT4_8K):
-        lods[curr_section - 1] += 1
+    # while the text is too long, increase the lod of the lowest lod section, starting from index 0
+    while get_num_tokens(curr_l2_text, ModelEnum.GPT4_8K) > max_tokens:
+        min_lod = min(lods)
+        lowest_lod = lods.index(min_lod)
+        lods[lowest_lod] += 1
+        # check if this is a valid configuration
+        if len(curr_paper.sections[lowest_lod].lods) <= lods[lowest_lod]:
+            # if not, throw an error
+            raise Exception("Out of bounds LOD")
+        curr_l2_text = get_l2_write_prompt_text(research_action_plan, curr_section, curr_paper, lods)
+
+    return curr_l2_text
+
+def get_l3_write_prompt_text(research: list[SearchResultSummary], rel_limit: int, section: str):
+    research_list_text = ""
+    # filter out all research below the relevancy limit
+    research = list(filter(lambda summary: summary.relevancy[section] >= rel_limit, research))
+    for summary in research:
+        # add a bullet point list of all details in that summary
+        for detail in summary.details:
+            research_list_text += f"- {detail}\n"
+
+    return f"""
+Notes:
+{research[0].details}
+"""
+
+def get_l3_write_prompt(curr_section: str, curr_research: list[SearchResultSummary], max_tokens: int):
+    # start by including all the summaries, go down from there, filtering out the least relevant ones first
+    rel_limit = 0
+    curr_l3_text = get_l3_write_prompt_text(curr_research, rel_limit, curr_section)
+    # while the text is too long, increase the relevancy limit
+    while get_num_tokens(curr_l3_text, ModelEnum.GPT4_8K) > max_tokens:
+        rel_limit += 1
+        if rel_limit > 10:
+            raise Exception("Relevancy limit exceeded")
+        curr_l3_text = get_l3_write_prompt_text(curr_research, rel_limit, curr_section)
+
+    return curr_l3_text
