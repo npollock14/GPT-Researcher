@@ -39,13 +39,10 @@ Content:
 """
 
 def get_l1_write_prompt(research_action_plan: ResearchActionPlanSchema, curr_section: str):
-    return f"""
-You are a world renowned researcher, known for your concise and information dense work. Use your knowledge as well as the provided notes to write the {curr_section} section to a {research_action_plan.type_of_paper_to_be_written} paper on: {research_action_plan.topic_of_research}. 
+    return f"""You are a world renowned researcher, known for your concise and information dense work. Use your knowledge as well as the provided notes to write the {curr_section} section to a {research_action_plan.type_of_paper_to_be_written} paper on: {research_action_plan.topic_of_research}. 
 The purpose of the paper is: {research_action_plan.purpose_of_context}
 The primary audience is: {research_action_plan.primary_audience}
-The paper structure will be:
-{", ".join(research_action_plan.paper_structure)}
-
+The paper structure will be: {", ".join(research_action_plan.paper_structure)}
 """
 
 def get_l2_write_prompt_text(research_action_plan: ResearchActionPlanSchema, curr_section: int, curr_paper: PaperSchema, lods: list[int]):
@@ -54,23 +51,24 @@ def get_l2_write_prompt_text(research_action_plan: ResearchActionPlanSchema, cur
     curr_idx = 0
     mentioned_text = ""
     for section in prev_sections:
-        if curr_idx is 0:
+        curr_lod = lods[curr_idx]
+        if curr_lod is 0:
             mentioned_text = "wrote"
         else:
             mentioned_text = "have talked about"
         prev_sections_prompt += f"""
 So far in the {section}, you {mentioned_text}:
-{curr_paper.sections[curr_idx]}
+{curr_paper.sections[curr_idx].lods[curr_lod]}
 """
         curr_idx += 1
 
 
-    return f"""
-    {prev_sections_prompt}
-
+    full_l2 = f"""{prev_sections_prompt}
 You are now in charge of writing the {research_action_plan.paper_structure[curr_section]} section. Make sure that your writing is information dense and fact based. Use markdown formatting.
-
-"""
+""".strip()
+    
+    full_l2 = "\n" + full_l2 + "\n"
+    return full_l2
 
 def get_l2_write_prompt(research_action_plan: ResearchActionPlanSchema, curr_section: int, curr_paper: PaperSchema, max_tokens: int):
     # initialize an array of lods at maximum detail (0)
@@ -88,20 +86,32 @@ def get_l2_write_prompt(research_action_plan: ResearchActionPlanSchema, curr_sec
             raise Exception("Out of bounds LOD")
         curr_l2_text = get_l2_write_prompt_text(research_action_plan, curr_section, curr_paper, lods)
 
-    return curr_l2_text
+    return curr_l2_text.strip() + "\n\n"
 
 def get_l3_write_prompt_text(research: list[SearchResultSummary], rel_limit: int, section: str):
     research_list_text = ""
-    # filter out all research below the relevancy limit
-    research = list(filter(lambda summary: summary.relevancy[section] >= rel_limit, research))
+
+    # filter out all research below the relevancy limit and those causing KeyError
+    def filter_func(summary: SearchResultSummary):
+        try:
+            return summary.relevancy[section] >= rel_limit
+        except KeyError:
+            return False
+
+    research = list(filter(filter_func, research))
+
     for summary in research:
         # add a bullet point list of all details in that summary
         for detail in summary.details:
             research_list_text += f"- {detail}\n"
 
+    # Handle empty research list to prevent IndexError
+    if not research:
+        return "No relevant notes found."
+
     return f"""
 Notes:
-{research[0].details}
+{research_list_text}
 """
 
 def get_l3_write_prompt(curr_section: str, curr_research: list[SearchResultSummary], max_tokens: int):
@@ -115,4 +125,4 @@ def get_l3_write_prompt(curr_section: str, curr_research: list[SearchResultSumma
             raise Exception("Relevancy limit exceeded")
         curr_l3_text = get_l3_write_prompt_text(curr_research, rel_limit, curr_section)
 
-    return curr_l3_text
+    return curr_l3_text.strip()

@@ -3,12 +3,41 @@ from newspaper import Article
 import tiktoken
 from schemas import ResearchActionPlanSchema, SearchResultSchema, ModelEnum, str_to_model_enum, SearchResultSummary
 from googlesearch import search
-from prompts import get_research_summary_prompt, prepare_source_material_for_summary_prompt
 import re
 import os
 import openai
 from aiohttp import ClientSession
 import asyncio
+import json
+
+
+def load_research_action_plan(file_path: str) -> ResearchActionPlanSchema:
+    with open(file_path) as json_file:
+        result_data = json_file.read()
+        return ResearchActionPlanSchema.model_validate_json(result_data)
+    
+def load_summary(file_path: str) -> list[SearchResultSummary]:
+    summaries: list[SearchResultSummary] = []
+    with open(file_path) as json_file:
+        temp_results = json.load(json_file)
+        for summary in temp_results:
+            result = SearchResultSchema(
+                title=summary["source_material"]["title"],
+                link=summary["source_material"]["link"],
+                content=summary["source_material"]["content"],
+                cost=summary["source_material"]["cost"],
+                model=str_to_model_enum(summary["source_material"]["model"])
+                )
+            res = SearchResultSummary(
+                source_material=result,
+                details=summary["details"],
+                authors=summary["authors"],
+                date=summary["date"],
+                relevancy=summary["relevancy"],
+                error=summary["error"]
+            )
+            summaries.append(res)
+    return summaries
 
 
 def fetch_site_content(url:str):
@@ -47,6 +76,8 @@ def est_cost_search_result(search_result: SearchResultSchema):
 
 
 def generate_search_results(research_action_plan: ResearchActionPlanSchema) -> list[SearchResultSchema]:
+    from prompts import get_research_summary_prompt, prepare_source_material_for_summary_prompt
+
     search_results = []
     for query in research_action_plan.search_queries:
         res = list(search(query, num_results=3, advanced=True))
