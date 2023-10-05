@@ -94,18 +94,31 @@ Error: {self.error}
 class SectionSchema(BaseModel):
     name: str
     lods: list[str]
+    max_lod_generated: bool = False
 
     def __str__(self):
         return f"""
 Section: {self.name}
 LODs: {self.lods}
 """
+    
+    def to_json(self):
+        return {
+            "name": self.name,
+            "lods": self.lods,
+            "max_lod_generated": self.max_lod_generated
+        }
 
 class PaperSchema(BaseModel):
     sections: list[SectionSchema] = []
 
     def __str__(self):
         return "\n".join([str(section) for section in self.sections])
+    
+    def to_json(self):
+        return {
+            "sections": [section.to_json() for section in self.sections]
+        }
     
 
     

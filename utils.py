@@ -181,6 +181,7 @@ async def summarize_result_async(search_result: SearchResultSchema, research_act
     return parse_raw_summary(raw_result, search_result)
 
 async def generate_lods(section: SectionSchema, action_plan: ResearchActionPlanSchema) -> SectionSchema:
+    print(f"!!!Generating LODs for section: {section.name}!!!")
     from prompts import get_lod_generation_prompt
     # check if can fit in 3.5-turbo-4k and then 3.5-turbo-16k
     curr_model: ModelEnum = ModelEnum.GPT3_5_TURBO_4K
@@ -203,7 +204,9 @@ async def generate_lods(section: SectionSchema, action_plan: ResearchActionPlanS
         presence_penalty=0
     )
     raw_result: str = completion.choices[0].message.content
-    return parse_raw_lod(raw_result, section)
+    new_section:SectionSchema = parse_raw_lod(raw_result, section)
+    new_section.max_lod_generated = True
+    return new_section
 
 def parse_raw_lod(raw_lod: str, section: SectionSchema) -> SectionSchema:
     # Split the string by the "Critical Info:" marker

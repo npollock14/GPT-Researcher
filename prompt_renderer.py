@@ -2,7 +2,7 @@ from schemas import ResearchActionPlanSchema, ModelEnum, PaperSchema, SearchResu
 from prompts import get_l1_write_prompt, get_l2_write_prompt, get_l3_write_prompt
 from utils import get_num_tokens
 
-def render_writing_prompt(research_action_plan: ResearchActionPlanSchema, curr_paper: PaperSchema, curr_section: int, research: list[SearchResultSummary], **kwargs):
+async def render_writing_prompt(research_action_plan: ResearchActionPlanSchema, curr_paper: PaperSchema, curr_section: int, research: list[SearchResultSummary], **kwargs):
     # get the max context limit of the writing model or from kwargs
     if "total_tokens" in kwargs:
         total_tokens = kwargs["total_tokens"]
@@ -20,8 +20,8 @@ def render_writing_prompt(research_action_plan: ResearchActionPlanSchema, curr_p
     l3_max_tokens = total_tokens - l2_max_tokens  # This ensures that rounding doesn't cause us to assign more tokens than available
 
     # l2 gives context on previous sections already written
-    l2_text, updated_paper = get_l2_write_prompt(research_action_plan, curr_section, curr_paper, max_tokens=l2_max_tokens)
-    curr_paper = updated_paper
+    l2_text = await get_l2_write_prompt(research_action_plan, curr_section, curr_paper, max_tokens=l2_max_tokens)
+    print(f"l2_text: {l2_text}")
 
     # Calculate how many tokens were used by l2 and adjust the max for l3
     l2_actual_tokens = get_num_tokens(l2_text, ModelEnum.GPT4_8K)
@@ -30,4 +30,4 @@ def render_writing_prompt(research_action_plan: ResearchActionPlanSchema, curr_p
     # l3 gives source material summaries to inform the writing of the current section
     l3_text = get_l3_write_prompt(curr_section_str, research, max_tokens=l3_max_tokens)
 
-    return l1_text + l2_text + l3_text, curr_paper
+    return l1_text + l2_text + l3_text
