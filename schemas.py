@@ -102,7 +102,7 @@ LODs: {self.lods}
 """
 
 class PaperSchema(BaseModel):
-    sections: list[SectionSchema]
+    sections: list[SectionSchema] = []
 
     def __str__(self):
         return "\n".join([str(section) for section in self.sections])

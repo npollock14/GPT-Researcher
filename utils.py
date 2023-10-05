@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup
 from newspaper import Article
 import tiktoken
-from schemas import ResearchActionPlanSchema, SearchResultSchema, ModelEnum, str_to_model_enum, SearchResultSummary
+from schemas import ResearchActionPlanSchema, SearchResultSchema, ModelEnum, str_to_model_enum, SearchResultSummary, SectionSchema
 from googlesearch import search
 import re
 import os
@@ -158,6 +158,7 @@ def parse_raw_summary(raw_summary: str, search_result: SearchResultSchema) -> Se
     )
 
 async def summarize_result_async(search_result: SearchResultSchema, research_action_plan: ResearchActionPlanSchema) -> SearchResultSummary:
+    from prompts import get_research_summary_prompt, prepare_source_material_for_summary_prompt
     completion = await openai.ChatCompletion.acreate(
         model=search_result.model.value.official_name,
         messages=[
@@ -179,7 +180,48 @@ async def summarize_result_async(search_result: SearchResultSchema, research_act
     raw_result: str = completion.choices[0].message.content
     return parse_raw_summary(raw_result, search_result)
 
-async def summarize_results(search_results: list[SearchResultSchema], research_action_plan: ResearchActionPlanSchema) -> list[dict]:
+async def generate_lods(section: SectionSchema, action_plan: ResearchActionPlanSchema) -> SectionSchema:
+    from prompts import get_lod_generation_prompt
+    # check if can fit in 3.5-turbo-4k and then 3.5-turbo-16k
+    curr_model: ModelEnum = ModelEnum.GPT3_5_TURBO_4K
+    prompt = get_lod_generation_prompt(section, action_plan)
+    print(f"Prompt: {prompt}")
+    if not fits_in_model(prompt, curr_model, padding_tokens=100):
+        curr_model = ModelEnum.GPT3_5_TURBO_16K
+    completion = await openai.ChatCompletion.acreate(
+        model=curr_model.value.official_name,
+        messages=[
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        temperature=0.7,
+        max_tokens=512,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0
+    )
+    raw_result: str = completion.choices[0].message.content
+    return parse_raw_lod(raw_result, section)
+
+def parse_raw_lod(raw_lod: str, section: SectionSchema) -> SectionSchema:
+    # Split the string by the "Critical Info:" marker
+    key_details_content, critical_info_content = raw_lod.split("Critical Info:")
+    
+    # Extract details from the key details content and retain the format
+    key_details_str = key_details_content.replace("Key Details:", "").strip()
+    
+    # Extract the critical info sentence
+    critical_info_sentence = critical_info_content.strip()
+    
+    # Append the key details and critical info sentence to the lods list
+    section.lods.append(key_details_str)
+    section.lods.append(critical_info_sentence)
+    
+    return section
+
+async def summarize_results(search_results: list[SearchResultSchema], research_action_plan: ResearchActionPlanSchema) -> list[SearchResultSummary]:
     # Create a new aiohttp client session
     session = ClientSession()
     openai.aiosession.set(session)

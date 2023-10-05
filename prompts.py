@@ -1,5 +1,6 @@
-from schemas import ResearchActionPlanSchema, SearchResultSchema, PaperSchema, ModelEnum, SearchResultSummary
-from utils import get_num_tokens
+from schemas import ResearchActionPlanSchema, SearchResultSchema, PaperSchema, ModelEnum, SearchResultSummary, SectionSchema
+from utils import get_num_tokens, generate_lods
+import asyncio
 
 def get_research_summary_prompt(research_action_plan: ResearchActionPlanSchema):
     csv_sections = (", ".join(research_action_plan.paper_structure)).strip()
@@ -81,12 +82,16 @@ def get_l2_write_prompt(research_action_plan: ResearchActionPlanSchema, curr_sec
         lowest_lod = lods.index(min_lod)
         lods[lowest_lod] += 1
         # check if this is a valid configuration
-        if len(curr_paper.sections[lowest_lod].lods) <= lods[lowest_lod]:
-            # if not, throw an error
+        if len(curr_paper.sections[lowest_lod].lods) == 1: # only gen lods when only 1 lod exists
+            # generate lods for this section
+            updated_section = asyncio.run(generate_lods(curr_paper.sections[lowest_lod], research_action_plan))
+            curr_paper.sections[lowest_lod] = updated_section
+            pass
+        elif len(curr_paper.sections[lowest_lod].lods) <= lods[lowest_lod]:
             raise Exception("Out of bounds LOD")
         curr_l2_text = get_l2_write_prompt_text(research_action_plan, curr_section, curr_paper, lods)
 
-    return curr_l2_text.strip() + "\n\n"
+    return curr_l2_text.strip() + "\n\n", curr_paper
 
 def get_l3_write_prompt_text(research: list[SearchResultSummary], rel_limit: int, section: str):
     research_list_text = ""
@@ -126,3 +131,17 @@ def get_l3_write_prompt(curr_section: str, curr_research: list[SearchResultSumma
         curr_l3_text = get_l3_write_prompt_text(curr_research, rel_limit, curr_section)
 
     return curr_l3_text.strip()
+
+def get_lod_generation_prompt(section: SectionSchema, action_plan: ResearchActionPlanSchema):
+    return f"""The following is the {section.name.lower()} section of an in progress {action_plan.type_of_paper_to_be_written.lower()} on {action_plan.topic_of_research}. Create a concise bullet point summary of key details from this section. Finally, create one sentence that is a highlights the most critical information in the entire section. Format this as:
+Key Details:
+- detail 1
+- detail 2
+...
+- detail n
+Critical Info:
+Critical info sentence here.
+
+{section.name} Section:
+{section.lods[0]}
+""".strip()

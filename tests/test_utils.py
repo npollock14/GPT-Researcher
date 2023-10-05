@@ -1,5 +1,6 @@
-from utils import parse_raw_summary, load_research_action_plan, load_summary
-from schemas import SearchResultSummary, SearchResultSchema, ModelEnum, ResearchActionPlanSchema
+from utils import parse_raw_summary, load_research_action_plan, load_summary, parse_raw_lod, generate_lods
+from schemas import SearchResultSummary, SearchResultSchema, ModelEnum, ResearchActionPlanSchema, SectionSchema
+import asyncio
 
 def test_parse_valid_summary():
     raw_summary = """
@@ -169,3 +170,69 @@ def test_load_research_action_plan():
         "Taylor Morrison future plans"
     ]
     
+
+def test_parse_raw_lod():
+    section = SectionSchema(
+        name="Test Title",
+        lods=["This is full content"]
+    )
+    ai_response = """Key Details:
+- Taylor Morrison reported a Q2 2023 net income of $235 million.
+- Home closings revenue reached $2.0 billion with a 3% increase in closings.
+- Net sales orders increased by 18%.
+- Moody's upgraded the company's credit rating to Ba2.
+- Taylor Morrison released its fifth annual ESG report, focusing on sustainability and diversity.
+- The company received corporate recognitions, including Newsweek's Most Responsible Companies list.
+- Taylor Morrison appointed a Corporate Director of Sustainability and advanced its DEIB strategy.
+- The company collaborated with the National Wildlife Federation for environmental stewardship.
+
+Critical Info:
+Taylor Morrison reported strong Q2 2023 financial performance with increased net income and home closings revenue. Additionally, the company's commitment to sustainability and diversity, as highlighted in its ESG report and corporate recognitions, underscores its position as a forward-thinking and responsible homebuilder."""
+
+    section = parse_raw_lod(ai_response, section)
+
+    assert section.lods == [
+        "This is full content",
+        "- Taylor Morrison reported a Q2 2023 net income of $235 million.\n- Home closings revenue reached $2.0 billion with a 3% increase in closings.\n- Net sales orders increased by 18%.\n- Moody's upgraded the company's credit rating to Ba2.\n- Taylor Morrison released its fifth annual ESG report, focusing on sustainability and diversity.\n- The company received corporate recognitions, including Newsweek's Most Responsible Companies list.\n- Taylor Morrison appointed a Corporate Director of Sustainability and advanced its DEIB strategy.\n- The company collaborated with the National Wildlife Federation for environmental stewardship.",
+        "Taylor Morrison reported strong Q2 2023 financial performance with increased net income and home closings revenue. Additionally, the company's commitment to sustainability and diversity, as highlighted in its ESG report and corporate recognitions, underscores its position as a forward-thinking and responsible homebuilder."
+    ]
+
+def test_generate_lods():
+    section = SectionSchema(
+        name="Recent Developments",
+        lods=["""## Recent Developments
+
+1. **Financial Performance Highlights**:
+   - Taylor Morrison reported a net income of $235 million, equivalent to $2.12 per diluted share, in Q2 2023.
+   - The company witnessed an increase of 3% in closings, amounting to 3,125 homes, at an average price of $639,000, resulting in home closings revenue of $2.0 billion.
+   - Despite a YoY decline of 240 basis points, home closings gross margin rose 30 basis points sequentially, settling at 24.2%.
+   - A notable 18% increase was observed in net sales orders, totaling 3,023, propelled by a monthly absorption rate of 3.1 per community.
+   - The quarter ended with around 72,000 homebuilding lots owned and controlled, equivalent to 5.8 years of total supply.
+   - Total liquidity achieved an unprecedented high, touching $2.3 billion, and homebuilding debt-to-capitalization dropped to 29.7% gross, and 15.4% net of $1.2 billion unrestricted cash.
+   - Moody's upgraded the company's credit rating to Ba2 from Ba3, maintaining a Stable outlook.
+   - The book value per share surged 30% to reach $45.96.
+
+2. **Sustainability and ESG Commitment**:
+   - Taylor Morrison released its fifth annual Environmental, Social, and Governance (ESG) Report. The report encapsulates three central pillars: Building for the Future, People First, and Transparency and Accountability.
+   - Significant milestones encompassed an initial review of the company's greenhouse gas inventory, alignment with the Task Force on Climate-Related Financial Disclosures, an innovative Board Fellowship Program to bolster under-represented business leaders, and renewed focus on diverse homebuyers. 
+   - The company fortified its partnership with the National Wildlife Federation and met disclosure standards as per the Sustainability Accounting Standards Board (SASB), Global Reporting Initiative (GRI), and Task Force on Climate-Related Financial Disclosures.
+
+3. **Corporate Recognitions**:
+   - Taylor Morrison's dedication to corporate responsibility secured its place on Newsweek's 2023 America's Most Responsible Companies list, excelling in corporate governance and social categories.
+   - The company marked its eighth consecutive year as America's Most Trusted® Home Builder by Lifestory Research.
+   - Other accolades included features on Wall Street Journal's 2022 Management Top 250, Bloomberg Gender-Equality Index (GEI), and the Fortune 500 list.
+
+4. **Strategic Appointments and Initiatives**:
+   - Taylor Morrison announced the appointment of its inaugural Corporate Director of Sustainability.
+   - Progressing its diversity, equity, inclusion, and belonging (DEIB) strategy, the company established a majority-diverse board of directors along with other pivotal initiatives.
+
+5. **Community and Partnership Developments**:
+   - Taylor Morrison has underlined its dedication to environmental and community stewardship by collaborating with the National Wildlife Federation to rejuvenate and safeguard wildlife habitats.
+
+These recent developments reinforce Taylor Morrison's position as a leading homebuilder with a commitment to sustainable growth, corporate responsibility, and financial robustness. The company continues to be forward-thinking, embedding ESG initiatives into its core business strategies and bolstering its market position."""]
+    )
+    research_action_plan: ResearchActionPlanSchema = load_research_action_plan("./tests/test_data/parsed_user_prompt_for_research.json")
+    section = asyncio.run(generate_lods(section, research_action_plan))
+    for lod in section.lods:
+        print(lod)
+        print()

@@ -12,8 +12,10 @@ def test_render_writing_prompt():
     summaries: list[SearchResultSummary] = load_summary(summary_output_file)
     curr_paper: PaperSchema = PaperSchema(sections=[])
 
+    # sections will be "Introduction, Company Overview, Recent Developments, Financial Performance, Strategic Initiatives, Conclusion"
+
     # render the writing prompt:
-    writing_prompt = render_writing_prompt(action_plan, curr_paper, 0, summaries)
+    writing_prompt, new_paper = render_writing_prompt(action_plan, curr_paper, 0, summaries)
     # print("=== Writing Prompt ===")
     # print(writing_prompt)
     # print("=== End Writing Prompt ===")
@@ -116,24 +118,81 @@ Notes:
     for i in range(0, 500):
         long_intro_text += "This is a long intro sentence. "
     curr_paper = PaperSchema(sections=[SectionSchema(name="Introduction", lods=[long_intro_text, "<this is a quick summary of the intro 123454321>"])])
-    writing_prompt = render_writing_prompt(action_plan, curr_paper, 1, summaries, total_tokens= 1800)
+    writing_prompt, new_paper = render_writing_prompt(action_plan, curr_paper, 1, summaries, total_tokens= 1800)
     # assert that contains the lower level details
     assert "This is a long intro sentence." not in writing_prompt
     assert "<this is a quick summary of the intro 123454321>" in writing_prompt
-    print("=== Writing Prompt ===")
-    print(writing_prompt)
-    print("=== End Writing Prompt ===")
+    
     assert fits_in_model(writing_prompt, ModelEnum.GPT4_8K)
-    print(f"Number of tokens: {get_num_tokens(writing_prompt, ModelEnum.GPT4_8K)}")
 
     med_intro_text = ""
-    for i in range(0, 100):
+    for i in range(0, 50):
         med_intro_text += "This is a long intro sentence. "
     curr_paper = PaperSchema(sections=[SectionSchema(name="Introduction", lods=[med_intro_text, "<this is a quick summary of the intro 123454321>"])])
-    writing_prompt = render_writing_prompt(action_plan, curr_paper, 1, summaries, total_tokens= 1800)
+    writing_prompt, new_paper = render_writing_prompt(action_plan, curr_paper, 1, summaries, total_tokens= 1800)
 
     # assert that contains the full intro
     assert "This is a long intro sentence." in writing_prompt
     assert "<this is a quick summary of the intro 123454321>" not in writing_prompt
+
+    # now test the third section:
+    long_intro_text = ""
+    for i in range(0, 50):
+        long_intro_text += "This is a long intro sentence. "
+    long_second_text = ""
+    for i in range(0, 50):
+        long_second_text += "This is a long second section sentence. "
+
+    curr_paper = PaperSchema(sections=[SectionSchema(name="Introduction", lods=[long_intro_text, "<this is a quick summary of the intro 123454321>"]), SectionSchema(name="Company Overview", lods=[long_second_text, "<this is a quick summary of the second section 123454321>"])])
+
+    writing_prompt, new_paper = render_writing_prompt(action_plan, curr_paper, 2, summaries, total_tokens= 2500)
+    # print("=== Writing Prompt ===")
+    # print(writing_prompt)
+    # print("=== End Writing Prompt ===")
+
+    # go to the fourth section:
+    long_third_text = ""
+    for i in range(0, 50):
+        long_third_text += "This is a long third section sentence. "
+
+    curr_paper = PaperSchema(sections=[SectionSchema(name="Introduction", lods=[long_intro_text, "<this is a quick summary of the intro 123454321>"]), SectionSchema(name="Company Overview", lods=[long_second_text, "<this is a quick summary of the second section 123454321>"]), SectionSchema(name="Recent Developments", lods=[long_third_text, "<this is a quick summary of the third section 123454321>"])])
+
+    writing_prompt, new_paper = render_writing_prompt(action_plan, curr_paper, 3, summaries, total_tokens= 2500)
+
+    # go to the fifth section:
+    long_fourth_text = ""
+    for i in range(0, 50):
+        long_fourth_text += "This is a long fourth section sentence. "
+
+    curr_paper = PaperSchema(sections=[SectionSchema(name="Introduction", lods=[long_intro_text, "<this is a quick summary of the intro 123454321>"]), SectionSchema(name="Company Overview", lods=[long_second_text, "<this is a quick summary of the second section 123454321>"]), SectionSchema(name="Recent Developments", lods=[long_third_text, "<this is a quick summary of the third section 123454321>"]), SectionSchema(name="Financial Performance", lods=[long_fourth_text, "<this is a quick summary of the fourth section 123454321>"])])
+
+    writing_prompt, new_paper = render_writing_prompt(action_plan, curr_paper, 4, summaries, total_tokens= 2200)
+
+    # go to the sixth section: Conclusion
+    long_fifth_text = ""
+    for i in range(0, 50):
+        long_fifth_text += "This is a long fifth section sentence. "
+
+    curr_paper = PaperSchema(sections=[SectionSchema(name="Introduction", lods=[long_intro_text, "<this is a quick summary of the intro 123454321>"]), SectionSchema(name="Company Overview", lods=[long_second_text, "<this is a quick summary of the second section 123454321>"]), SectionSchema(name="Recent Developments", lods=[long_third_text, "<this is a quick summary of the third section 123454321>"]), SectionSchema(name="Financial Performance", lods=[long_fourth_text, "<this is a quick summary of the fourth section 123454321>"]), SectionSchema(name="Strategic Initiatives", lods=[long_fifth_text, "<this is a quick summary of the fifth section 123454321>"])])
+
+    writing_prompt, new_paper = render_writing_prompt(action_plan, curr_paper, 5, summaries, total_tokens= 500)
+    # print("=== Writing Prompt ===")
+    # print(writing_prompt)
+    # print("=== End Writing Prompt ===")
+    # print(f"Number of tokens: {get_num_tokens(writing_prompt, ModelEnum.GPT4_8K)}")
+
+    summary_text = ""
+    for i in range(0, 10):
+        summary_text += "This is a summary sentence. "
+
+    critical_text = "This is a critical sentence. "
+
+    curr_paper = PaperSchema(sections=[SectionSchema(name="Introduction", lods=[long_intro_text, summary_text, critical_text]), SectionSchema(name="Company Overview", lods=[long_second_text, summary_text, critical_text]), SectionSchema(name="Recent Developments", lods=[long_third_text, summary_text, critical_text]), SectionSchema(name="Financial Performance", lods=[long_fourth_text, summary_text, critical_text]), SectionSchema(name="Strategic Initiatives", lods=[long_fifth_text, summary_text, critical_text])])
+
+    writing_prompt, new_paper = render_writing_prompt(action_plan, curr_paper, 5, summaries, total_tokens= 2000)
+    print("=== Writing Prompt ===")
+    print(writing_prompt)
+    print("=== End Writing Prompt ===")
+    print(f"Number of tokens: {get_num_tokens(writing_prompt, ModelEnum.GPT4_8K)}")
 
     
