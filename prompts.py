@@ -43,7 +43,7 @@ Content:
 """
 
 def get_l1_write_prompt(research_action_plan: ResearchActionPlanSchema, curr_section: str):
-    return f"""You are a world renowned researcher, known for your concise and information dense work. Use your knowledge as well as the provided notes to write the {curr_section} section to a {research_action_plan.type_of_paper_to_be_written} paper on: {research_action_plan.topic_of_research}. 
+    return f"""> You are a world renowned researcher, known for your concise and information dense work. Use your knowledge as well as the provided notes to write the {curr_section} section to a {research_action_plan.type_of_paper_to_be_written} paper on: {research_action_plan.topic_of_research}. 
 The purpose of the paper is: {research_action_plan.purpose_of_context}
 The primary audience is: {research_action_plan.primary_audience}
 The paper structure will be: {", ".join(research_action_plan.paper_structure)}
@@ -57,11 +57,11 @@ def get_l2_write_prompt_text(research_action_plan: ResearchActionPlanSchema, cur
     for section in prev_sections:
         curr_lod = lods[curr_idx]
         if curr_lod is 0:
-            mentioned_text = f"In the {section}, you wrote:"
+            mentioned_text = f"> In the {section} section, you wrote:"
         elif curr_lod is 1:
-            mentioned_text = f"The key details of what you wrote in the {section} section are:"
+            mentioned_text = f"> The key details of what you wrote in the {section} section are:"
         else:
-            mentioned_text = f"The critical information from what you wrote the {section} section is:"
+            mentioned_text = f"> The critical information from what you wrote the {section} section is:"
         prev_sections_prompt += f"""
 {mentioned_text}
 {curr_paper.sections[curr_idx].lods[curr_lod]}
@@ -70,7 +70,7 @@ def get_l2_write_prompt_text(research_action_plan: ResearchActionPlanSchema, cur
 
 
     full_l2 = f"""{prev_sections_prompt}
-You are now in charge of writing the {research_action_plan.paper_structure[curr_section]} section. Make sure that your writing is information dense and fact based. Use markdown formatting.
+> You are now in charge of writing the {research_action_plan.paper_structure[curr_section]} section. Make sure that your writing is information dense and fact based. Use markdown formatting.
 """.strip()
     
     full_l2 = "\n" + full_l2 + "\n\n"
@@ -106,7 +106,6 @@ async def get_l2_write_prompt(research_action_plan: ResearchActionPlanSchema, cu
         
         # Compute scores for all sections
         scores = [compute_score(i) for i in range(len(curr_paper.sections))]
-        print(f"Scores: {scores}")
         
         # Get the index of the section with the lowest score to reduce its LOD
         section_to_reduce = scores.index(min(scores))
@@ -143,7 +142,6 @@ def get_l3_write_prompt_text(research: list[SearchResultSummary], rel_limit: int
 
     # Handle empty research list to prevent IndexError
     if not research:
-        print(f"rel_limit: {rel_limit}, section: {section}, detail_limit: {detail_limit}")
         return "No relevant notes found.", 0
 
     # if detail limit is not -1, limit the number of details per summary
@@ -159,7 +157,7 @@ def get_l3_write_prompt_text(research: list[SearchResultSummary], rel_limit: int
     
 
     return f"""
-Notes:
+> Notes:
 {research_list_text}
 """, len(research)
 

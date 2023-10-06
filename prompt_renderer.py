@@ -21,7 +21,6 @@ async def render_writing_prompt(research_action_plan: ResearchActionPlanSchema, 
 
     # l2 gives context on previous sections already written
     l2_text = await get_l2_write_prompt(research_action_plan, curr_section, curr_paper, max_tokens=l2_max_tokens)
-    print(f"l2_text: {l2_text}")
 
     # Calculate how many tokens were used by l2 and adjust the max for l3
     l2_actual_tokens = get_num_tokens(l2_text, ModelEnum.GPT4_8K)

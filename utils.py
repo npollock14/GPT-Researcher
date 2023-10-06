@@ -257,7 +257,6 @@ if __name__ == "__main__":
     import os
     from dotenv import load_dotenv
     load_dotenv()
-    openai.api_key = os.getenv("OPENAI_API_KEY")
 
     parsed_user_prompt_output_file = "./outputs/parsed_user_prompt_for_research.json"
 
