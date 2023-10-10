@@ -12,7 +12,7 @@ def test_write_paper():
     action_plan: ResearchActionPlanSchema = load_research_action_plan(parsed_user_prompt_output_file)
     summaries: list[SearchResultSummary] = load_summary(summary_output_file)
 
-    paper: PaperSchema = asyncio.run(write_paper(action_plan, summaries))
+    paper: PaperSchema = asyncio.run(write_paper(action_plan, summaries, context_limit=4000))
     # save the paper to a file in outputs
     # save the paper to file
     with open('./outputs/paper.json', 'w') as outfile:

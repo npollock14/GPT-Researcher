@@ -24,12 +24,15 @@ async def generate_section_content(writing_prompt: str, model: ModelEnum=ModelEn
     new_section: str = completion.choices[0].message.content
     return new_section
 
-async def write_paper(research_action_plan: ResearchActionPlanSchema, research: list[SearchResultSummary]):
+async def write_paper(research_action_plan: ResearchActionPlanSchema, research: list[SearchResultSummary], **kwargs):
+    # check if kwargs has a context_limit int
+    # if it does, then use that as the max_tokens
+    max_context = kwargs.get("context_limit", ModelEnum.GPT4_8K.value.max_context)
     paper = PaperSchema()
     curr_section = 0
     ttl_sections = len(research_action_plan.paper_structure)
     while curr_section < ttl_sections:
-        prompt = await render_writing_prompt(research_action_plan, paper, curr_section, research)
+        prompt = await render_writing_prompt(research_action_plan, paper, curr_section, research, total_tokens=max_context)
         print(prompt)
         raw_new_section_text = await generate_section_content(prompt)
         new_section:SectionSchema = SectionSchema(name=research_action_plan.paper_structure[curr_section], lods=[raw_new_section_text])

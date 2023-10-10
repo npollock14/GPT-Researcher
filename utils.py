@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup
 from newspaper import Article
 import tiktoken
-from schemas import ResearchActionPlanSchema, SearchResultSchema, ModelEnum, str_to_model_enum, SearchResultSummary, SectionSchema
+from schemas import ResearchActionPlanSchema, SearchResultSchema, ModelEnum, str_to_model_enum, SearchResultSummary, SectionSchema, PaperSchema
 from googlesearch import search
 import re
 import os
@@ -9,6 +9,8 @@ import openai
 from aiohttp import ClientSession
 import asyncio
 import json
+from md2pdf.core import md2pdf
+
 
 
 def load_research_action_plan(file_path: str) -> ResearchActionPlanSchema:
@@ -251,86 +253,10 @@ def clean_content(content: str) -> str:
     
     return cleaned_content
 
-if __name__ == "__main__":
-    # load a test schema from ./outputs/parsed_user_prompt_for_research.json
-    import json
-    import os
-    from dotenv import load_dotenv
-    load_dotenv()
 
-    parsed_user_prompt_output_file = "./outputs/parsed_user_prompt_for_research.json"
+def convert_paper_to_pdf(paper: PaperSchema):
+    content = ""
+    for section in paper.sections:
+        content += section.lods[0] + "\n\n"
 
-    if not os.path.exists(parsed_user_prompt_output_file):
-        print(f"Error: {parsed_user_prompt_output_file} not found")
-        exit(1)
-    with open(parsed_user_prompt_output_file) as json_file:
-        result_data = json_file.read()
-        action_plan = ResearchActionPlanSchema.model_validate_json(result_data)
-
-    search_result_output_file = "./outputs/search_results.json"
-    search_results: list[SearchResultSchema] = []
-    if os.path.exists(search_result_output_file):
-        # just use the cached search results
-        with open(search_result_output_file) as json_file:
-            temp_results = json.load(json_file)
-            for search_result in temp_results:
-                res = SearchResultSchema(
-                    title=search_result["title"],
-                    link=search_result["link"],
-                    content=search_result["content"],
-                    cost=search_result["cost"],
-                    model=str_to_model_enum(search_result["model"])
-                )
-                search_results.append(res)
-    else:
-        # generate search results
-        search_results = generate_search_results(action_plan)
-        # save search results to a file outputs/search_results.json
-        with open(search_result_output_file, 'w') as outfile:
-            json.dump([search_result.to_json() for search_result in search_results], outfile, indent=4)
-
-    summary_output_file = "./outputs/summary.json"
-    summaries: list[SearchResultSummary] = []
-    if os.path.exists(summary_output_file):
-        # just use the cached summary
-        with open(summary_output_file) as json_file:
-            summaries = json.load(json_file)
-    else:
-        # summarize search result for index 0
-        # sum the cost of all search results and ask user if they want to continue
-        total_cost = 0
-        for search_result in search_results:
-            total_cost += search_result.cost
-
-        print(f"Total cost of processing {len(search_results)} search results: ${total_cost}")
-        ipt = input("Do you want to continue? (y/n): ")
-        if ipt.lower() != "y":
-            exit(0)
-
-        # parallelize the summarization of search results
-        summaries: list[SearchResultSummary] = asyncio.run(summarize_results(search_results, action_plan))
-
-        summary_output_file = "./outputs/summary.json"
-        # save the summaries to a file outputs/summary.json
-        with open(summary_output_file, 'w') as outfile:
-            json.dump([summary.to_json() for summary in summaries], outfile, indent=4)
-
-    num_details = 0
-    num_details_with_error = 0
-    relevance_scores = {}
-    for summary in summaries:
-        # filter out summaries with error or empty details
-        if summary["error"] is not None or len(summary["details"]) == 0:
-            continue
-        print("- "+"\n- ".join(summary["details"]))
-        num_details += len(summary["details"])
-        if summary["error"] is not None:
-            num_details_with_error += len(summary["details"])
-        for section, score in summary["relevancy"].items():
-            if section not in relevance_scores:
-                relevance_scores[section] = 0
-            relevance_scores[section] += score * len(summary["details"])
-
-    print(f"Total number of details: {num_details}")
-    print(f"Total number of details with error: {num_details_with_error}")
-    print(f"Relevance scores: {relevance_scores}")
+    md2pdf("./outputs/paper.pdf", md_content=content)

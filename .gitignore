@@ -6,3 +6,4 @@
 *__pycache__*
 *.pytest_cache
 /log.txt
+/logs/detail.log
